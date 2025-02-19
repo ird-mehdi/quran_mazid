@@ -13,9 +13,8 @@ class AudioController extends GetxController {
   RxDouble sliderPosition = 0.0.obs;
 
   List<String> ayahFiles = [];
-  int currentAyahIndex = 0;
   List<Duration> ayahDurations = [];
-
+  int currentAyahIndex = 0;
   bool isStopped = false;
 
   StreamSubscription<Duration>? _positionSubscription;
@@ -25,7 +24,7 @@ class AudioController extends GetxController {
   void onInit() {
     super.onInit();
     _initStreams();
-    loadSurah("114");
+    loadSurah("001"); // Default Surah Load
   }
 
   void _initStreams() {
@@ -37,118 +36,102 @@ class AudioController extends GetxController {
       }
     });
 
-    _playerStateSubscription = player.playerStateStream.listen((state) {
+    _playerStateSubscription = player.playerStateStream.listen((state) async {
       if (state.processingState == ProcessingState.completed && !isStopped) {
         if (currentAyahIndex < ayahFiles.length - 1) {
           currentAyahIndex++;
-          _playAyah(currentAyahIndex);
+          await _playAyah(currentAyahIndex);
         } else {
-          // Reset when all ayahs are finished
-          isStopped = true;
-          isPlaying.value = false;
-          currentAyahIndex = 0;
-          currentPosition.value = Duration.zero;
-          sliderPosition.value = 0.0; // Reset slider position
-          player.stop();
-          player.seek(Duration.zero); // Ensure position is reset
-          _playAyah(0); // Preload first ayah
+          /// 🔥 **পুরো অডিও শেষ হলে আবার প্রথম আয়াত চালু হবে।**
+          // currentAyahIndex = 0;
+          // await _playAyah(currentAyahIndex);
+          stopAudio();
         }
       }
     });
   }
 
   Future<void> loadSurah(String surahIndex) async {
-    String jsonString = await rootBundle.loadString(
-      'assets/audio/$surahIndex/index.json',
-    );
-    Map<String, dynamic> jsonData = json.decode(jsonString);
+    try {
+      String jsonString = await rootBundle.loadString(
+        'assets/audio/$surahIndex/index.json',
+      );
+      Map<String, dynamic> jsonData = json.decode(jsonString);
 
-    ayahFiles.clear();
-    ayahDurations.clear();
-    totalDuration.value = Duration.zero;
+      ayahFiles.clear();
+      ayahDurations.clear();
+      totalDuration.value = Duration.zero;
 
-    for (var key in jsonData["verse"].keys) {
-      String filePath =
-          "assets/audio/$surahIndex/${jsonData["verse"][key]["file"]}";
-      ayahFiles.add(filePath);
+      for (var key in jsonData["verse"].keys) {
+        String filePath =
+            "assets/audio/$surahIndex/${jsonData["verse"][key]["file"]}";
+        ayahFiles.add(filePath);
 
-      final duration = await player.setAsset(filePath);
-      if (duration != null) {
-        ayahDurations.add(duration);
-        totalDuration.value += duration;
+        final duration = await player.setAsset(filePath);
+        if (duration != null) {
+          ayahDurations.add(duration);
+          totalDuration.value += duration;
+        }
       }
+
+      currentAyahIndex = 0;
+      isPlaying.value = false;
+      isStopped = false;
+      currentPosition.value = Duration.zero;
+      await player.setAsset(ayahFiles[currentAyahIndex]);
+    } catch (e) {
+      print("Error loading Surah: $e");
     }
-
-    currentAyahIndex = 0;
-    isPlaying.value = false;
-    isStopped = false;
-    currentPosition.value = Duration.zero;
-
-    // Just preload the first ayah without playing
-    await player.setAsset(ayahFiles[currentAyahIndex]);
-    await player.pause();
   }
 
   Duration _getPreviousAyahsDuration() {
-    Duration total = Duration.zero;
-    for (int i = 0; i < currentAyahIndex; i++) {
-      total += ayahDurations[i];
-    }
-    return total;
+    return ayahDurations
+        .sublist(0, currentAyahIndex)
+        .fold(Duration.zero, (prev, element) => prev + element);
   }
 
   Future<void> seek(Duration position) async {
     int targetAyahIndex = 0;
     Duration accumulatedDuration = Duration.zero;
 
-    // Find target ayah without updating position yet
     for (int i = 0; i < ayahDurations.length; i++) {
       Duration nextDuration = accumulatedDuration + ayahDurations[i];
-      if (position >= nextDuration) {
-        accumulatedDuration = nextDuration;
-      } else {
+      if (position < nextDuration) {
         targetAyahIndex = i;
         break;
       }
+      accumulatedDuration = nextDuration;
     }
 
     Duration positionInAyah = position - accumulatedDuration;
 
-    // Only update UI after we've calculated everything
     currentPosition.value = position;
     sliderPosition.value = position.inSeconds.toDouble();
 
     if (targetAyahIndex != currentAyahIndex) {
       currentAyahIndex = targetAyahIndex;
       await player.setAsset(ayahFiles[targetAyahIndex]);
-      if (isPlaying.value) {
-        await player.play();
-      }
+      await player.seek(positionInAyah);
+    } else {
+      await player.seek(positionInAyah);
     }
-    await player.seek(positionInAyah);
+
+    if (isPlaying.value) {
+      await player.play();
+    }
   }
 
   Future<void> _playAyah(int index) async {
-    if (index >= ayahFiles.length) {
-      isPlaying.value = false;
-      return;
-    }
-
-    if (isStopped) {
-      return; // Don't play if stopped
-    }
+    if (index >= ayahFiles.length || isStopped) return;
 
     try {
-      // Set playing state before loading to show correct icon
       isPlaying.value = true;
-
       await player.setAsset(ayahFiles[index]);
       await player.play();
-
-      // Update player state based on actual playback
-      isPlaying.value = player.playing;
+      currentPosition.value = _getPreviousAyahsDuration();
+      sliderPosition.value = currentPosition.value.inSeconds.toDouble();
     } catch (e) {
-      print("Error loading audio: $e");
+      print("Error playing Ayah: $e");
       isPlaying.value = false;
     }
   }
@@ -157,10 +140,10 @@ class AudioController extends GetxController {
     isStopped = true;
     isPlaying.value = false;
     await player.stop();
-    await player.seek(Duration.zero); // Add explicit seek to start
+    await player.seek(Duration.zero);
     currentPosition.value = Duration.zero;
+    sliderPosition.value = 0.0;
     currentAyahIndex = 0;
-    // Preload first ayah after stopping
     await player.setAsset(ayahFiles[currentAyahIndex]);
   }
 
@@ -171,18 +154,13 @@ class AudioController extends GetxController {
   }
 
   Future<void> playAudio() async {
-    if (player.playing) return;
-
     isStopped = false;
 
     if (currentPosition.value >= totalDuration.value) {
-      // If at end, start from beginning
-      currentPosition.value = Duration.zero;
-      sliderPosition.value = 0.0;
+      /// 🔥 **অডিও শেষ হলে আবার প্রথম আয়াত থেকে শুরু করবে।**
       currentAyahIndex = 0;
       await _playAyah(0);
     } else {
-      // Resume from current position
       isPlaying.value = true;
       await player.play();
     }
@@ -191,7 +169,11 @@ class AudioController extends GetxController {
   Future<void> nextAyah() async {
     if (currentAyahIndex < ayahFiles.length - 1) {
       currentAyahIndex++;
-      await _playAyah(currentAyahIndex);
+      if (!isPlaying.value) {
+        await _playAyah(currentAyahIndex);
+      } else {
+        await player.play();
+      }
     }
   }
 
