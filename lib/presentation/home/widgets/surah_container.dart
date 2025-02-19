@@ -65,7 +65,11 @@ class SuraListItem extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => SurahDetailPage(surahNumber: surah.number),
+            builder:
+                (context) => SurahDetailPage(
+                  surahNumber: surah.number,
+                  surahName: surah.name,
+                ),
           ),
         );
       },

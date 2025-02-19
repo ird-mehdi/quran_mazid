@@ -6,8 +6,13 @@ import 'package:quran_mazid_app/presentation/surah_detail/widgets/ayah_item.dart
 import 'package:quran_mazid_app/presentation/surah_detail/widgets/audio_player_widget.dart';
 
 class SurahDetailPage extends StatelessWidget {
-  const SurahDetailPage({super.key, required this.surahNumber});
+  const SurahDetailPage({
+    super.key,
+    required this.surahNumber,
+    required this.surahName,
+  });
   final int surahNumber;
+  final String surahName;
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +20,7 @@ class SurahDetailPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFFDFAF3),
       appBar: AppBar(
-        title: const Text('Al-Fatiha'),
+        title: Text(surahName),
         centerTitle: true,
         backgroundColor: const Color(0xFFFDFAF3),
         leading: IconButton(
