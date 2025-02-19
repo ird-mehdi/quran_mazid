@@ -24,7 +24,6 @@ class AudioController extends GetxController {
   void onInit() {
     super.onInit();
     _initStreams();
-    loadSurah("001"); // Default Surah Load
   }
 
   void _initStreams() {

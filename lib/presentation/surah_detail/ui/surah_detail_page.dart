@@ -37,6 +37,7 @@ class SurahDetailPage extends StatelessWidget {
               builder: () => _buildAyahList(presenter),
             ),
           ),
+
           AudioPlayerWidget(surahNumber: surahNumber),
         ],
       ),
