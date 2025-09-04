@@ -7,6 +7,10 @@ class QuranMazidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(debugShowCheckedModeBanner: false, home: HomePage());
+    return GetMaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: HomePage(),
+      //home: AudioPlayerScreen(),
+    );
   }
 }
